@@ -1,0 +1,245 @@
+---
+title: "ESS6 Thesis"
+author: "Sudrishti"
+output: html_document
+---
+
+```{r}
+library(dplyr)
+library(ggplot2)
+
+setwd("~/Thesis")
+
+#-------------------------------
+#reading and cleaning the dataset
+header_line <- readLines("ESS6e02_6.csv", n = 1)
+column_names <- unlist(strsplit(header_line, ","))  
+
+ess6 <- read.csv("ESS6e02_6.csv", sep = ",", header = FALSE,skip = 1,
+                 col.names = column_names, stringsAsFactors = FALSE)
+
+colnames(ess6) <- gsub("^X\\.", "", colnames(ess6))     
+colnames(ess6) <- gsub("\\.$", "", colnames(ess6))      
+
+#-------------------------------
+
+#-------------------------------
+#basic overview of the dataset
+
+
+cat("Dataset Dimensions (Rows x Columns):\n")
+dim(ess6) # data dimension
+
+
+cat("\n Structure of the Data:\n")
+str(ess6[1:10]) #structure of data
+
+# no of missing values
+cat("\n Missing Values (Top 20 variables):\n")
+na_summary <- sapply(ess6, function(x) sum(is.na(x)))
+sort(na_summary, decreasing = TRUE)[1:20] 
+
+key_vars <- c("cntry", "gndr", "agea", "physact", "stflife", "happy", "hinctnta")
+available_vars <- key_vars[key_vars %in% colnames(ess6)]
+
+
+
+
+#Respondent Count by Country
+if ("cntry" %in% colnames(ess6)) {
+  cat("\n Respondents per Country:\n")
+    ess6 %>%
+      group_by(cntry) %>%
+      summarise(count = n()) %>%
+      arrange(desc(count))
+}
+
+#Gender Distribution: 1-Male, 2-Female, 9-No answer
+if ("gndr" %in% colnames(ess6)) {
+  cat("\nGender Distribution:\n")
+  table(ess6$gndr, useNA = "ifany")
+}
+
+#-------------------------------
+
+#-------------------------------
+#basic plotting of the datasets
+```
+
+```{r}
+
+# dropping the NA for plots
+ess6_plot <- ess6 %>% filter(!is.na(cntry), !is.na(gndr), !is.na(agea), !is.na(physact), !is.na(happy), !is.na(hinctnta))
+
+
+#Country distribution (top 20 countries )
+ess6 %>%
+  count(cntry, sort = TRUE) %>%
+  top_n(20) %>%
+  ggplot(aes(x = reorder(cntry, n), y = n)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +
+  labs(title = "Top 15 Countries by Respondent Count", x = "Country", y = "Count") +
+  theme_minimal()
+```
+
+```{r}
+#Gender distribution
+
+ess6$gender_label <- factor(ess6$gndr,
+                            levels = c(1, 2, 9),
+                            labels = c("Male", "Female", "No Answer"))
+ggplot(ess6, aes(x = as.factor(gender_label))) +
+  geom_bar(fill = "orange") +
+  labs(title = "Gender Distribution", x = "Gender", y = "Count") +
+  theme_minimal()
+```
+
+```{r}
+#physical activity frequency
+
+ggplot(ess6, aes(x = as.factor(physact))) +
+  geom_bar(fill = "darkred") +
+  labs(title = "Physical Activity Frequency", x = "Physical Activity Code", y = "Count") +
+  theme_minimal()
+
+```
+
+```{r}
+#Age distribution
+
+ess6$agea <- ifelse(ess6$agea == 999, NA, ess6$agea)
+
+ggplot(ess6, aes(x = agea)) +
+  geom_histogram(binwidth = 5, fill = "steelblue", color = "white") +
+  labs(title = "Age Distribution of Respondents",
+       x = "Age",
+       y = "Count") +
+  theme_minimal()
+
+```
+
+```{r}
+#happiness distribution
+ess6$happy <- ifelse(ess6$happy %in% c(77, 88, 99), NA, ess6$happy)
+
+
+ggplot(ess6 %>% filter(!is.na(happy)), aes(x = as.factor(happy))) +
+  geom_bar(fill = "goldenrod", color = "white") +
+  labs(title = "Distribution of Happiness Levels",
+       x = "Happiness (0 = extremely unhappy, 10 = extremely happy)",
+       y = "Count") +
+  theme_minimal()
+
+```
+
+```{r}
+#  Income decile distribution
+ess6$hinctnta_clean <- ifelse(ess6$hinctnta %in% c(77, 88, 99), NA, ess6$hinctnta)
+
+ess6$income_decile_label <- factor(ess6$hinctnta_clean, levels = 1:10,
+                                   labels = paste("Decile", 1:10))
+
+ggplot(ess6, aes(x = as.factor(income_decile_label))) +
+  geom_bar(fill = "dodgerblue") +
+  labs(title = "Income Decile Distribution", x = "Income Decile", y = "Count") +
+  theme_minimal()
+
+#-------------------------------
+```
+
+```{r}
+#-------------------------------
+
+#Exploring relationships between physical activity and gender
+
+ess6$physact <- ifelse(ess6$physact %in% c(77, 88, 99), NA, ess6$physact)
+
+# Bar plot: Activity frequency by gender
+ggplot(ess6 %>% filter(!is.na(physact), gndr %in% c(1, 2)), 
+       aes(x = factor(physact), fill = gender_label)) +
+  geom_bar(position = "dodge") +
+  labs(title = "Physical Activity by Gender",
+       x = "Physically Active for the last 7 days",
+       y = "Count",
+       fill = "Gender") +
+  theme_minimal()
+
+```
+
+```{r}
+#-------------------------------
+
+#Exploring relationships between physical activity and age
+
+ess6$age_group <- cut(ess6$agea,
+                      breaks = c(14, 29, 44, 59, 74, 100),
+                      labels = c("15–29", "30–44", "45–59", "60–74", "75+"),
+                      right = TRUE)
+
+ggplot(ess6 %>% filter(!is.na(age_group), !is.na(physact)), 
+       aes(x = as.factor(physact), fill = age_group)) +
+  geom_bar(position = "dodge") +
+  labs(title = "Physical Activity by Age Group",
+       x = "Physically Active Days (last 7 days)",
+       y = "Count",
+       fill = "Age Group") +
+  theme_minimal()
+
+```
+
+```{r}
+#-------------------------------
+
+#Exploring relationships between physical activity and country
+ess6 %>%
+  filter(!is.na(physact), !is.na(cntry)) %>%
+  group_by(cntry) %>%
+  summarise(avg_physact = mean(physact, na.rm = TRUE)) %>%
+  ggplot(aes(x = reorder(cntry, avg_physact), y = avg_physact)) +
+  geom_col(fill = "seagreen") +
+  labs(title = "Average Physical Activity by Country",
+       x = "Country", y = "Average Activity Level (0–7)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+```{r}
+#-------------------------------
+
+#Exploring relationships between physical activity and happiness
+ess6 %>%
+  filter(!is.na(happy), !is.na(physact)) %>%
+  group_by(physact) %>%
+  summarise(avg_happy = mean(happy, na.rm = TRUE)) %>%
+  ggplot(aes(x = physact, y = avg_happy)) +
+  geom_line(color = "blue", size = 1.2) +
+  geom_point(size = 2) +
+  labs(title = "Average Happiness by Physical Activity Level",
+       x = "Physical Activity (Days per Week)", y = "Average Happiness") +
+  theme_minimal()
+
+
+```
+
+```{r}
+
+#-------------------------------
+
+#Exploring relationships between physical activity and income level
+ess6$hinctnta <- ifelse(ess6$hinctnta %in% c(77, 88, 99), NA, ess6$hinctnta)
+
+
+ess6 %>%
+  filter(!is.na(physact), !is.na(hinctnta)) %>%
+  group_by(hinctnta) %>%
+  summarise(avg_physact = mean(physact, na.rm = TRUE)) %>%
+  ggplot(aes(x = hinctnta, y = avg_physact)) +
+  geom_line(color = "darkgreen", size = 1.2) +
+  geom_point(size = 2) +
+  labs(title = "Average Physical Activity by Income Level",
+       x = "Income Level (1 = Lowest, 10 = Highest)",
+       y = "Average Physical Activity (Days per Week)") +
+  theme_minimal()
+```
+
+
